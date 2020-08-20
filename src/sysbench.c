@@ -80,7 +80,7 @@
 #define VERSION_STRING PACKAGE" "PACKAGE_VERSION SB_GIT_SHA
 
 /* Maximum queue length for the tx-rate mode. Must be a power of 2 */
-#define MAX_QUEUE_LEN 131072
+#define MAX_QUEUE_LEN 500000
 
 /*
   Extra thread ID assigned to background threads. This may be used as an index
