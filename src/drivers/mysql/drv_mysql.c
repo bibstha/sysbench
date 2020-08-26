@@ -997,10 +997,17 @@ db_error_t mysql_drv_query(db_conn_t *sb_conn, const char *query, size_t len,
     {
       DEBUG("mysql_drv_query - Found dropped query from plugin", NULL);
       rs->counter = SB_CNT_GUARANTEED_CAPACITY_DROP;
+      rs->nrows = 0;
+      rs->nfields = 0;
+      rs->ptr = NULL;
+      rs->cpu_util = 0;
+
       return DB_ERROR_NONE;
     }
     else
+    {
       return check_error(sb_conn, "mysql_drv_query()", query, &rs->counter);
+    }
   }
 
   /* Store results and get query type */

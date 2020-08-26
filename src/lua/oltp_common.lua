@@ -250,7 +250,7 @@ end
 local t = sysbench.sql.type
 local stmt_defs = {
    point_selects = {
-      "SELECT c FROM sbtest%u WHERE id=?",
+      "SELECT c FROM sbtest%u WHERE id=? /*scope:admin*/",
       t.INT},
    simple_ranges = {
       "SELECT c FROM sbtest%u WHERE id BETWEEN ? AND ?",
@@ -416,13 +416,20 @@ function commit()
    stmt.commit:execute()
 end
 
+local ffi_enum_read = ffi.new('sb_counter_type', "SB_CNT_READ")
+local ffi_enum_drop = ffi.new('sb_counter_type', "SB_CNT_GUARANTEED_CAPACITY_DROP")
+local scope_result = {
+  admin = { read = 0, drop = 0 },
+  non_admin = { read = 0, drop = 0 }
+}
+
 function execute_point_selects()
    local tnum = get_table_num()
    local i
 
    for i = 1, sysbench.opt.point_selects do
       param[tnum].point_selects[1]:set(get_id())
-
+      
       stmt[tnum].point_selects:execute()
    end
 end

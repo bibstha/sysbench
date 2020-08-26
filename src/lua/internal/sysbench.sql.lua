@@ -100,6 +100,7 @@ typedef struct
   sql_statement  *statement;    /* Pointer to prepared statement (if used) */
   void           *ptr;          /* Pointer to driver-specific data */
   sql_row        row;           /* Last fetched row */
+  uint64_t       cpu_util;      /* Integer - Percentage 0.5 -> 50 */
 } sql_result;
 
 typedef enum
