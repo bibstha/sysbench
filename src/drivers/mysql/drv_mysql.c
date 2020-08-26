@@ -204,6 +204,9 @@ static ssl_mode_map_t ssl_mode_names[] = {
 };
 #endif
 
+/* Error number when guaranteed capacity mysql plugin drops the query */
+#define ERROR_NUM_PLUGIN_DROP 3164
+
 /* MySQL driver operations */
 
 static int mysql_drv_init(void);
@@ -785,9 +788,8 @@ static db_error_t check_error(db_conn_t *sb_con, const char *func,
   MYSQL          *con = db_mysql_con->mysql;
 
   const unsigned int error = mysql_errno(con);
-  DEBUG("mysql_errno(%p) = %u", con, sb_con->sql_errno);
-
   sb_con->sql_errno = (int) error;
+  DEBUG("mysql_errno(%p) = %u", con, error);
 
   sb_con->sql_state = mysql_sqlstate(con);
   DEBUG("mysql_state(%p) = %s", con, SAFESTR(sb_con->sql_state));
@@ -972,8 +974,34 @@ db_error_t mysql_drv_query(db_conn_t *sb_conn, const char *query, size_t len,
   int err = mysql_real_query(con, query, len);
   DEBUG("mysql_real_query(%p, \"%s\", %zd) = %d", con, query, len, err);
 
-  if (SB_UNLIKELY(err != 0))
-    return check_error(sb_conn, "mysql_drv_query()", query, &rs->counter);
+  if (SB_UNLIKELY(err != 0)) {
+    /* Handle guaranteed capacity error as a separate case.
+     *
+     * When a mysql error occurs, the following things happen
+     * 1. error counter incremented.
+     * 2. cpu_utilization is added.
+     * 3. sb_event_stop not called and therefore
+     * 4. Latency histogram NOT UPDATED (affects latency report)
+     * 5. Overall event counter also not incremented
+     *
+     * 3164 Error = When Audit plugin drops the query
+     * We treat it as a valid query and therefore
+     *
+     * 1. increment error counter + guaranteed_capacity counter
+     * 2. cpu_utilization is added as before
+     * 3. sb_event_stop called and therefore
+     * 4. Latency histogram UPDATED (affects latency report)
+     * 5. Overall event counter also incremented
+     */
+    if (mysql_errno(con) == ERROR_NUM_PLUGIN_DROP)
+    {
+      DEBUG("mysql_drv_query - Found dropped query from plugin", NULL);
+      rs->counter = SB_CNT_GUARANTEED_CAPACITY_DROP;
+      return DB_ERROR_NONE;
+    }
+    else
+      return check_error(sb_conn, "mysql_drv_query()", query, &rs->counter);
+  }
 
   /* Store results and get query type */
   MYSQL_RES *res = mysql_store_result(con);
