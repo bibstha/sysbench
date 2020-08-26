@@ -250,32 +250,32 @@ end
 local t = sysbench.sql.type
 local stmt_defs = {
    point_selects = {
-      "SELECT c FROM sbtest%u WHERE id=? /*scope:admin*/",
-      t.INT},
+      "SELECT c FROM sbtest%u WHERE id=? /*?*/",
+      t.INT, {t.CHAR, 120}},
    simple_ranges = {
-      "SELECT c FROM sbtest%u WHERE id BETWEEN ? AND ?",
-      t.INT, t.INT},
+      "SELECT c FROM sbtest%u WHERE id BETWEEN ? AND ? /*?*/",
+      t.INT, t.INT, {t.CHAR, 120}},
    sum_ranges = {
-      "SELECT SUM(k) FROM sbtest%u WHERE id BETWEEN ? AND ?",
-       t.INT, t.INT},
+      "SELECT SUM(k) FROM sbtest%u WHERE id BETWEEN ? AND ? /*?*/",
+       t.INT, t.INT, {t.CHAR, 120}},
    order_ranges = {
-      "SELECT c FROM sbtest%u WHERE id BETWEEN ? AND ? ORDER BY c",
-       t.INT, t.INT},
+      "SELECT c FROM sbtest%u WHERE id BETWEEN ? AND ? ORDER BY c /*?*/",
+       t.INT, t.INT, {t.CHAR, 120}},
    distinct_ranges = {
-      "SELECT DISTINCT c FROM sbtest%u WHERE id BETWEEN ? AND ? ORDER BY c",
-      t.INT, t.INT},
+      "SELECT DISTINCT c FROM sbtest%u WHERE id BETWEEN ? AND ? ORDER BY c /*?*/",
+      t.INT, t.INT, {t.CHAR, 120}},
    index_updates = {
-      "UPDATE sbtest%u SET k=k+1 WHERE id=?",
-      t.INT},
+      "UPDATE sbtest%u SET k=k+1 WHERE id=? /*?*/",
+      t.INT, {t.CHAR, 120}},
    non_index_updates = {
-      "UPDATE sbtest%u SET c=? WHERE id=?",
-      {t.CHAR, 120}, t.INT},
+      "UPDATE sbtest%u SET c=? WHERE id=? /*?*/",
+      {t.CHAR, 120}, t.INT, {t.CHAR, 120}},
    deletes = {
-      "DELETE FROM sbtest%u WHERE id=?",
-      t.INT},
+      "DELETE FROM sbtest%u WHERE id=? /*?*/",
+      t.INT, {t.CHAR, 120}},
    inserts = {
-      "INSERT INTO sbtest%u (id, k, c, pad) VALUES (?, ?, ?, ?)",
-      t.INT, t.INT, {t.CHAR, 120}, {t.CHAR, 60}},
+      "INSERT INTO sbtest%u (id, k, c, pad) VALUES (?, ?, ?, ?) /*?*/",
+      t.INT, t.INT, {t.CHAR, 120}, {t.CHAR, 60}, {t.CHAR, 120}},
 }
 
 function prepare_begin()
@@ -387,6 +387,7 @@ end
 
 function thread_done()
    close_statements()
+   show_scope_drop_results()
    con:disconnect()
 end
 
@@ -420,17 +421,54 @@ local ffi_enum_read = ffi.new('sb_counter_type', "SB_CNT_READ")
 local ffi_enum_drop = ffi.new('sb_counter_type', "SB_CNT_GUARANTEED_CAPACITY_DROP")
 local scope_result = {
   admin = { read = 0, drop = 0 },
-  non_admin = { read = 0, drop = 0 }
+  other = { read = 0, drop = 0 }
 }
+
+local fmt = "read-and-drop,%d,%d,%d,%d"
+function show_scope_drop_results()
+  print(string.format(
+    fmt,
+    scope_result["admin"]["read"],
+    scope_result["admin"]["drop"],
+    scope_result["other"]["read"],
+    scope_result["other"]["drop"]
+  ))
+end
+
+function log_counter(counter, scope)
+   if counter == ffi_enum_read then
+     scope_result[scope]["read"] = scope_result[scope]["read"] + 1
+   elseif counter == ffi_enum_drop then
+     scope_result[scope]["drop"] = scope_result[scope]["drop"] + 1
+   end
+end
+
+function get_scope()
+   local admin = sysbench.opt.admin_scope_perc
+   local rand_val = sysbench.rand.uniform(1, 100)
+
+   if rand_val <= admin then
+      return "admin"
+   else
+      return "other"
+   end
+end
+
+function format_scope(scope)
+    return "',scope:" .. scope .. ",'"
+end
 
 function execute_point_selects()
    local tnum = get_table_num()
    local i
 
    for i = 1, sysbench.opt.point_selects do
+      local scope = get_scope()
       param[tnum].point_selects[1]:set(get_id())
+      param[tnum].point_selects[2]:set(format_scope(scope))
       
-      stmt[tnum].point_selects:execute()
+      local result = stmt[tnum].point_selects:execute()
+      log_counter(result.counter, scope)
    end
 end
 
@@ -439,11 +477,14 @@ local function execute_range(key)
 
    for i = 1, sysbench.opt[key] do
       local id = get_id()
+      local scope = get_scope()
 
       param[tnum][key][1]:set(id)
       param[tnum][key][2]:set(id + sysbench.opt.range_size - 1)
+      param[tnum][key][3]:set(format_scope(scope))
 
-      stmt[tnum][key]:execute()
+      local result = stmt[tnum][key]:execute()
+      log_counter(result.counter, scope)
    end
 end
 
@@ -467,9 +508,13 @@ function execute_index_updates()
    local tnum = get_table_num()
 
    for i = 1, sysbench.opt.index_updates do
-      param[tnum].index_updates[1]:set(get_id())
+      local scope = get_scope()
 
-      stmt[tnum].index_updates:execute()
+      param[tnum].index_updates[1]:set(get_id())
+      param[tnum].index_updates[2]:set(format_scope(scope))
+
+      local result = stmt[tnum].index_updates:execute()
+      log_counter(result.counter, scope)
    end
 end
 
@@ -477,10 +522,14 @@ function execute_non_index_updates()
    local tnum = get_table_num()
 
    for i = 1, sysbench.opt.non_index_updates do
+      local scope = get_scope()
+
       param[tnum].non_index_updates[1]:set_rand_str(c_value_template)
       param[tnum].non_index_updates[2]:set(get_id())
+      param[tnum].non_index_updates[3]:set(format_scope(scope))
 
-      stmt[tnum].non_index_updates:execute()
+      local result = stmt[tnum].non_index_updates:execute()
+      log_counter(result.counter, scope)
    end
 end
 
@@ -490,16 +539,22 @@ function execute_delete_inserts()
    for i = 1, sysbench.opt.delete_inserts do
       local id = get_id()
       local k = get_id()
+      local scope1 = get_scope()
+      local scope2 = get_scope()
 
       param[tnum].deletes[1]:set(id)
+      param[tnum].deletes[2]:set(format_scope(scope1))
 
       param[tnum].inserts[1]:set(id)
       param[tnum].inserts[2]:set(k)
       param[tnum].inserts[3]:set_rand_str(c_value_template)
       param[tnum].inserts[4]:set_rand_str(pad_value_template)
+      param[tnum].inserts[5]:set(format_scope(scope2))
 
-      stmt[tnum].deletes:execute()
-      stmt[tnum].inserts:execute()
+      local result1 = stmt[tnum].deletes:execute()
+      local result2 = stmt[tnum].inserts:execute()
+      log_counter(result1.counter, scope1)
+      log_counter(result2.counter, scope2)
    end
 end
 
