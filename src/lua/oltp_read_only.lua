@@ -21,6 +21,9 @@
 
 require("oltp_common")
 
+-- Append scope option
+sysbench.cmdline.options.admin_scope_perc = {"Percentage of admin requests", 5}
+
 function prepare_statements()
    prepare_point_selects()
 

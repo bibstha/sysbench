@@ -68,6 +68,7 @@ typedef enum
   SB_CNT_RECONNECT,
   SB_CNT_BYTES_READ,
   SB_CNT_BYTES_WRITTEN,
+  SB_CNT_CPU_UTIL_SUM,
   SB_CNT_GUARANTEED_CAPACITY_DROP,
   SB_CNT_MAX
 } sb_counter_type;
@@ -100,6 +101,7 @@ typedef struct
   sql_statement  *statement;    /* Pointer to prepared statement (if used) */
   void           *ptr;          /* Pointer to driver-specific data */
   sql_row        row;           /* Last fetched row */
+  uint64_t       cpu_util;      /* Integer - Percentage 0.5 -> 50 */
 } sql_result;
 
 typedef enum

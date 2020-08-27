@@ -496,7 +496,7 @@ db_result_t *db_execute(db_stmt_t *stmt)
 
   if (SB_LIKELY(con->error == DB_ERROR_NONE))
   {
-    if (rs->counter == SB_CNT_READ)
+    if (rs->counter == SB_CNT_READ || rs->counter == SB_CNT_GUARANTEED_CAPACITY_DROP)
     {
       con->state = DB_CONN_RESULT_SET;
       return rs;
