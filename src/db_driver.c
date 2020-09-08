@@ -797,6 +797,9 @@ int db_print_value(db_bind_t *var, char *buf, int buflen)
       n = snprintf(buf, buflen, "'%d-%d-%d %d:%d:%d'", tm->year, tm->month,
                    tm->day, tm->hour, tm->minute, tm->second);
       break;
+    case DB_TYPE_LITERAL:
+      n = snprintf(buf, buflen, "%.*s", *var->data_len, (char *)var->buffer);
+      break;
     default:
       n = 0;
       break;
