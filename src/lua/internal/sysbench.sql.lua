@@ -118,7 +118,8 @@ typedef enum
   SQL_TYPE_DATETIME,
   SQL_TYPE_TIMESTAMP,
   SQL_TYPE_CHAR,
-  SQL_TYPE_VARCHAR
+  SQL_TYPE_VARCHAR,
+  SQL_TYPE_LITERAL
 } sql_bind_type_t;
 
 typedef struct
@@ -177,7 +178,8 @@ sysbench.sql.type =
       DATETIME = ffi.C.SQL_TYPE_DATETIME,
       TIMESTAMP = ffi.C.SQL_TYPE_TIMESTAMP,
       CHAR = ffi.C.SQL_TYPE_CHAR,
-      VARCHAR = ffi.C.SQL_TYPE_VARCHAR
+      VARCHAR = ffi.C.SQL_TYPE_VARCHAR,
+      LITERAL = ffi.C.SQL_TYPE_LITERAL
    }
 
 -- Initialize a given SQL driver and return a handle to it to create
@@ -343,7 +345,8 @@ function sql_param.set(self, value)
    then
       self.buffer[1] = value
    elseif btype == sql_type.CHAR or
-      btype == sql_type.VARCHAR
+      btype == sql_type.VARCHAR or
+      btype == sql_type.LITERAL
    then
       local len = #value
       len = self.max_len < len and self.max_len or len
@@ -401,6 +404,11 @@ function statement_methods.bind_create(self, btype, max_len)
       btype == sql_type.VARCHAR
    then
       param.type = sql_type.VARCHAR
+      param.buffer = ffi.new('char[?]', max_len)
+      param.max_len = max_len
+   elseif btype == sql_type.LITERAL
+   then
+      param.type = sql_type.LITERAL
       param.buffer = ffi.new('char[?]', max_len)
       param.max_len = max_len
    else
